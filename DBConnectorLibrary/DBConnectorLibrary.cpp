@@ -2,36 +2,36 @@
 
 CTLSDBConnector dbConnector;
 
-//void DBWriteFunction(void)
-//{
-//    if (dbConnector.Query((WCHAR*)L"begin;") == FALSE)
-//    {
-//        wprintf_s(L"begin failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
-//    }
-//
-//    if (dbConnector.Query((WCHAR*)L"UPDATE `character` SET `level` = `level` + 1 WHERE `character_no` = %lld;", 1) == FALSE)
-//    {
-//        wprintf_s(L"levelup failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
-//    }
-//
-//    if (dbConnector.Query((WCHAR*)L"commit;") == FALSE)
-//    {
-//        wprintf_s(L"commit failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
-//    }
-//
-//    if (dbConnector.Query((WCHAR*)L"SELECT * FROM `character`;") == FALSE)
-//    {
-//        wprintf_s(L"commit failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
-//    }
-//
-//    MYSQL_ROW mysqlRow = dbConnector.FetchRow();
-//
-//    dbConnector.FreeResult();
-//
-//    printf_s("no : %s, level : %s, money : %s\n", mysqlRow[0], mysqlRow[1], mysqlRow[2]);
-//
-//    return;
-//}
+void DBWriteFunction(void)
+{
+	if (dbConnector.Query((WCHAR*)L"begin;") == FALSE)
+	{
+		wprintf_s(L"begin failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
+	}
+
+	if (dbConnector.Query((WCHAR*)L"UPDATE `character` SET `level` = `level` + 1 WHERE `character_no` = %lld;", 1) == FALSE)
+	{
+		wprintf_s(L"levelup failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
+	}
+
+	if (dbConnector.Query((WCHAR*)L"commit;") == FALSE)
+	{
+		wprintf_s(L"commit failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
+	}
+
+	if (dbConnector.Query((WCHAR*)L"SELECT * FROM `character`;") == FALSE)
+	{
+		wprintf_s(L"commit failed, error no : %d, error msg : %s\n", dbConnector.GetLastError(), dbConnector.GetLastErrorMessage());
+	}
+
+	MYSQL_ROW mysqlRow = dbConnector.FetchRow();
+
+	dbConnector.FreeResult();
+
+	printf_s("no : %s, level : %s, money : %s\n", mysqlRow[0], mysqlRow[1], mysqlRow[2]);
+
+	return;
+}
 
 
 INT main()
