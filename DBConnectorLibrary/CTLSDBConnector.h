@@ -2,11 +2,6 @@
 
 #include "CDBConnector.h"
 
-namespace tlsdbconnector
-{
-	constexpr DWORD MAX_QUERY_LENGTH = 2000;
-};
-
 
 class CTLSDBConnector
 {
@@ -18,7 +13,7 @@ public:
 		mTLSIndex = TlsAlloc();
 		if (mTLSIndex == TLS_OUT_OF_INDEXES)
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[CTLSDBConnector] Error Code : %d", GetLastError());
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[CTLSDBConnector] Error Code : %d", GetLastError());
 
 			CCrashDump::Crash();
 		}
@@ -26,97 +21,82 @@ public:
 
 	~CTLSDBConnector(void)
 	{
-		if (TlsFree(mTLSIndex) == FALSE)
+		if (TlsFree(mTLSIndex) == false)
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[~CTLSDBConnector] Error Code : %d", GetLastError());
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[~CTLSDBConnector] Error Code : %d", GetLastError());
 
 			CCrashDump::Crash();
 		}
 	}
 
-	BOOL Connect(WCHAR* pConnectIP, DWORD connectPort, WCHAR* pSchema, WCHAR* pUserID, WCHAR* pUserPassword)
+	bool Connect(const wchar_t* pConnectIP, unsigned short connectPort, const wchar_t* pSchema, const wchar_t* pUserID, const wchar_t* pUserPassword)
 	{
 		CDBConnector* pDBConnector = getDBConnector();
 
-		if (pDBConnector->Connect(pConnectIP, connectPort, pSchema, pUserID, pUserPassword) == FALSE)
-		{
-			return FALSE;
-		}
+		if (pDBConnector->Connect(pConnectIP, connectPort, pSchema, pUserID, pUserPassword) == false)
+			return false;
 
-		return TRUE;
+		return true;
 	}
 
-	BOOL Reconnect(void)
+	bool Reconnect(void)
 	{
 		CDBConnector* pDBConnector = getDBConnector();
+		if (pDBConnector->Reconnect() == false)
+			return false;
 
-		if (pDBConnector->Reconnect() == FALSE)
-		{
-			return FALSE;
-		}
-
-		return TRUE;
+		return true;
 	}
 
-	BOOL Disconnect(void)
+	void Disconnect(void)
 	{
-		BOOL retval;
-
 		CDBConnector* pDBConnector = getDBConnector();
 
-		retval = pDBConnector->Disconnect();
+		pDBConnector->Disconnect();
 
 		delete pDBConnector;
 
 		if (TlsSetValue(mTLSIndex, nullptr) == 0)
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[Disconnect] Error Code : %d", GetLastError());
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[Disconnect] Error Code : %d", GetLastError());
 
 			CCrashDump::Crash();
 		}
 
-		return retval;
+		return;
 	}
 
-	BOOL MySQLCharacterSet(WCHAR* pCharacterSet)
+	bool MySQLCharacterSet(wchar_t* pCharacterSet)
 	{
 		CDBConnector* pDBConnector = getDBConnector();
+		if (pDBConnector->MySQLCharacterSet(pCharacterSet) == false)
+			return false;
 
-		if (pDBConnector->MySQLCharacterSet(pCharacterSet) == FALSE)
-		{
-			return FALSE;
-		}
-
-		return TRUE;
+		return true;
 	}
 
 
-	BOOL Query(WCHAR* pQueryFormat, ...)
+	bool Query(const wchar_t* pQueryFormat, ...)
 	{
 		CDBConnector* pDBConnector = getDBConnector();
 
-		WCHAR wideByteQuery[tlsdbconnector::MAX_QUERY_LENGTH];
+		wchar_t wideByteQuery[dbconnector::MAX_QUERY_LENGTH];
 
-		va_list va = NULL;
-
+		va_list va;
 		va_start(va, pQueryFormat);
 
-		HRESULT retval = NULL;
-
-		retval = StringCchVPrintfW(wideByteQuery, tlsdbconnector::MAX_QUERY_LENGTH, pQueryFormat, va);
+		HRESULT retval = StringCchVPrintfW(wideByteQuery, dbconnector::MAX_QUERY_LENGTH, pQueryFormat, va);
 		if (FAILED(retval))
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"DBConnector", L"[Query] Error Code : %d, return : %d, format : %s, va : %s", GetLastError(), retval, pQueryFormat, va);
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"DBConnector", L"[Query] Error Code : %d, return : %d, format : %s, va : %s", GetLastError(), retval, pQueryFormat, va);
 
 			CCrashDump::Crash();
 		}
 
-		if (pDBConnector->Query(wideByteQuery) == FALSE)
-		{
-			return FALSE;
-		}
+		if (pDBConnector->Query(wideByteQuery) == false)
+			return false;
 
-		return TRUE;
+		return true;
 	}
 
 	void StoreResult(void)
@@ -138,25 +118,22 @@ public:
 		return;
 	}
 
-	BOOL GetConnectStateFlag(void)
-	{
-		
+	bool GetConnectStateFlag(void)
+	{	
 		return getDBConnector()->GetConnectStateFlag();
 	}
 
-	INT GetLastError(void)
-	{
-		
+	unsigned int GetLastError(void)
+	{	
 		return getDBConnector()->GetLastError();
 	}
 
-	const WCHAR* GetLastErrorMessage(void)
-	{
-		
+	const wchar_t* GetLastErrorMessage(void)
+	{	
 		return getDBConnector()->GetLastErrorMessage();
 	}
 
-	BOOL CheckReconnectErrorCode(void)
+	bool CheckReconnectErrorCode(void)
 	{
 		return getDBConnector()->CheckReconnectErrorCode();
 	}
@@ -172,7 +149,7 @@ private:
 
 			if (TlsSetValue(mTLSIndex, (PVOID)pDBConnector) == 0)
 			{
-				CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[setDBConnector] Error Code : %d", GetLastError());
+				CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"TLSDBConnector", L"[setDBConnector] Error Code : %d", GetLastError());
 
 				CCrashDump::Crash();
 			}
@@ -181,6 +158,6 @@ private:
 		return pDBConnector;
 	}
 
-	DWORD mTLSIndex;
+	unsigned int mTLSIndex;
 };
 

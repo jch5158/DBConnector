@@ -10,17 +10,9 @@
 
 namespace dbconnector
 {	
-	constexpr DWORD MAX_QUERY_LENGTH = 2000;
+	constexpr int MAX_QUERY_LENGTH = 2000;
 
-	constexpr DWORD MAX_IP_LENGTH = 50;
-
-	constexpr DWORD MAX_ID_LENGTH = 30;
-
-	constexpr DWORD MAX_PASSWORD_LENGTH = 100;
-
-	constexpr DWORD MAX_ERROR_MESSAGE_LENGTH = 300;
-
-	constexpr DWORD MAX_SCHEMA_LENGTH = 100;
+	constexpr int MAX_ERROR_MESSAGE_LENGTH = 300;
 };
 
 
@@ -33,68 +25,68 @@ public:
 		: mMySQL{ 0, }
 		, mpMySQL(nullptr)
 		, mpMySQLResult(nullptr)
-		, mbConnectStateFlag(FALSE)
+		, mbConnectStateFlag(false)
 		, mLastErrorCode(0)
 		, mConnectPort(0)
-		, mConnectIP{ 0, }
-		, mSchema{ 0, }
-		, mUserID{ 0, }
-		, mUserPassword{ 0, }
-		, mLastErrorMessage{ 0, }
-		, mWideByteQuery{ 0, }
-		, mMultiByteQuery{ 0, }
+		, mConnectIP()
+		, mSchema()
+		, mUserID()
+		, mUserPassword()
+		, mLastErrorMessage(dbconnector::MAX_ERROR_MESSAGE_LENGTH,L'\0')
+		, mWideByteQuery(dbconnector::MAX_QUERY_LENGTH,L'\0')
+		, mMultiByteQuery(dbconnector::MAX_QUERY_LENGTH, '\0')
+		
 	{
 		mysql_init(&mMySQL);
 
 		// MYSQL ping 호출 시 재연결 설정
-		bool reconnect = 1; // 1;
+		bool reconnect = true; // 1;
 
 		mysql_options(&mMySQL, MYSQL_OPT_RECONNECT, &reconnect);
 	}
 
-
 	~CDBConnector(void)
-	{
-	}
+	{}
 
-	BOOL Connect(WCHAR* pConnectIP, DWORD connectPort, WCHAR* pSchema, WCHAR* pUserID, WCHAR* pUserPassword)
+
+	CDBConnector(const CDBConnector&) = delete;
+	CDBConnector& operator=(const CDBConnector&) = delete;
+
+	bool Connect(const wchar_t* pConnectIP, unsigned short connectPort, const wchar_t* pSchema, const wchar_t* pUserID, const wchar_t* pUserPass)
 	{	
-		setConnectInfo(pConnectIP, connectPort, pSchema, pUserID, pUserPassword);
+		setConnectInfo(pConnectIP, connectPort, pSchema, pUserID, pUserPass);
+		size_t size;	
 
-		CHAR connectIP[dbconnector::MAX_IP_LENGTH];
+		std::string connectIP(wcslen(pConnectIP) + 1, '\0');
+		wcstombs_s(&size, &connectIP[0], connectIP.size(), pConnectIP, connectIP.size());
 
-		WideCharToMultiByte(CP_ACP, 0, mConnectIP, -1, connectIP, dbconnector::MAX_IP_LENGTH, NULL, NULL);
+		std::string schema(wcslen(pSchema) + 1, '\0');
+		wcstombs_s(&size, &schema[0], schema.size(), pSchema, schema.size());
 
-		CHAR schema[dbconnector::MAX_SCHEMA_LENGTH];
+		std::string userID(wcslen(pUserID) + 1,'\0');
+		wcstombs_s(&size, &userID[0], userID.size(), pUserID, userID.size());
 
-		WideCharToMultiByte(CP_ACP, 0, mSchema, -1, schema, dbconnector::MAX_SCHEMA_LENGTH, NULL, NULL);
+		std::string userPass(wcslen(pUserPass) + 1, '\0');
+		wcstombs_s(&size, &userPass[0], userPass.size(), pUserPass, userPass.size());
 
-		CHAR userID[dbconnector::MAX_ID_LENGTH];
-
-		WideCharToMultiByte(CP_ACP, 0, mUserID, -1, userID, dbconnector::MAX_ID_LENGTH, NULL, NULL);
-
-		CHAR userPassword[dbconnector::MAX_PASSWORD_LENGTH];
-
-		WideCharToMultiByte(CP_ACP, 0, mUserPassword, -1, userPassword, dbconnector::MAX_PASSWORD_LENGTH, NULL, NULL);
-
-		mpMySQL = mysql_real_connect(&mMySQL, connectIP, userID, userPassword, schema, connectPort, nullptr, 0);
+		mpMySQL = mysql_real_connect(&mMySQL, connectIP.c_str(), userID.c_str(), userPass.c_str(), schema.c_str(), connectPort, nullptr, 0);
 		if (mpMySQL == nullptr)
 		{
 			mLastErrorCode = mysql_errno(&mMySQL);
 
 			setWideByteErrorMessage(mysql_error(&mMySQL));
 
-			return FALSE;
+			return false;
 		}
 
-		mbConnectStateFlag = TRUE;
+		mbConnectStateFlag = true;
 
-		return TRUE;
+		return true;
 	}
 
-	BOOL Reconnect(void)
+	bool Reconnect(void)
 	{
-		if (CheckReconnectErrorCode() == TRUE)
+		if (CheckReconnectErrorCode() == true)
 		{
 			if (mysql_ping(mpMySQL) != 0)
 			{
@@ -102,82 +94,81 @@ public:
 
 				setWideByteErrorMessage(mysql_error(mpMySQL));
 
-				return FALSE;
+				return false;
 			}
 		}
 		else
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"[DBConnector]", L"[Reconnect] LastErrorCode : %d, Error Message : %s", mLastErrorCode, mLastErrorMessage);
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"[DBConnector]", L"[Reconnect] LastErrorCode : %d, Error Message : %s", mLastErrorCode, mLastErrorMessage);
 
 			CCrashDump::Crash();
 		}
 
-		return TRUE;
+		return true;
 	}
 
-	BOOL Disconnect(void)
+	void Disconnect(void)
 	{
 		if (mpMySQL == nullptr)
-		{
-			return FALSE;
-		}
+			return;
 
 		mysql_close(mpMySQL);
 
-		mbConnectStateFlag = FALSE;
+		mbConnectStateFlag = false;
 
 		mpMySQL = nullptr;
 
-		return TRUE;
+		return;
 	}
 
 
-	BOOL MySQLCharacterSet(WCHAR* pCharacterSet)
-	{
-		CHAR multiByteBuffer[MAX_PATH];
+	// euckr 등의 문자셋을 지정
+	bool MySQLCharacterSet(const wchar_t* pCharacterSet)
+	{	
+		std::string multiByteStr(wcslen(pCharacterSet) + 1, '\0');
 
-		WideCharToMultiByte(CP_ACP, 0, pCharacterSet, -1, multiByteBuffer, MAX_PATH, NULL, NULL);
-		if (mysql_set_character_set(mpMySQL, multiByteBuffer) != 0)
+		size_t size;
+		wcstombs_s(&size, &multiByteStr[0], multiByteStr.size(), pCharacterSet, multiByteStr.size());
+
+		if (mysql_set_character_set(mpMySQL, multiByteStr.c_str()) != 0)
 		{
 			mLastErrorCode = mysql_errno(mpMySQL);
 
 			setWideByteErrorMessage(mysql_error(&mMySQL));
 
-			return FALSE;
+			return false;
 		}
 
-		return TRUE;
+		return true;
 	}
 
 
-	BOOL Query(WCHAR* pQueryFormat, ...)
+	bool Query(const wchar_t* pQueryFormat, ...)
 	{
-		va_list va = NULL;
-
+		// 가변인자 처리
+		va_list va;
 		va_start(va, pQueryFormat);
-
-		HRESULT retval = NULL;
-
-		retval = StringCchVPrintfW(mWideByteQuery, dbconnector::MAX_QUERY_LENGTH, pQueryFormat, va);
+		HRESULT retval = StringCchVPrintfW(&mWideByteQuery[0], dbconnector::MAX_QUERY_LENGTH, pQueryFormat, va);
 		if (FAILED(retval))
 		{
-			CSystemLog::GetInstance()->Log(TRUE, CSystemLog::eLogLevel::LogLevelError, L"DBConnector", L"[Query] Error Code : %d, return : %d, format : %s, va : %s", GetLastError(), retval, pQueryFormat, va);
+			CSystemLog::GetInstance()->Log(true, CSystemLog::eLogLevel::LogLevelError, L"DBConnector", L"[Query] Error Code : %d, return : %d, format : %s, va : %s", GetLastError(), retval, pQueryFormat, va);
 
 			CCrashDump::Crash();
 		}
 
-		WideCharToMultiByte(CP_ACP, 0, mWideByteQuery, -1, mMultiByteQuery, dbconnector::MAX_QUERY_LENGTH, NULL, NULL);
+		size_t size;
+		wcstombs_s(&size, &mMultiByteQuery[0], mMultiByteQuery.size(), mWideByteQuery.c_str(), mWideByteQuery.size());
 
-		if (mysql_query(mpMySQL, mMultiByteQuery) != 0)
+		if (mysql_query(mpMySQL, mMultiByteQuery.c_str()) != 0)
 		{		
 			mLastErrorCode = mysql_errno(mpMySQL);
 
 			setWideByteErrorMessage(mysql_error(&mMySQL));
 
-			return FALSE;
+			return false;
 		}
 
-		return TRUE;
+		return true;
 	}
 
 	void StoreResult(void)
@@ -188,38 +179,39 @@ public:
 		return;
 	}
 	
-	
 	MYSQL_ROW FetchRow(void)
 	{
+		// 행을 가져온다.
 		return mysql_fetch_row(mpMySQLResult);
 	}
 
 
 	void FreeResult(void)
 	{
+		// 응답받은 데이터 정리
 		mysql_free_result(mpMySQLResult);
 
 		return;
 	}
 
-	BOOL GetConnectStateFlag(void) const
+	bool GetConnectStateFlag(void) const
 	{
 		return mbConnectStateFlag;
 	}
 
-	INT GetLastError(void) const
+	unsigned int GetLastError(void) const
 	{
 		return mLastErrorCode;
 	}
 
 
-	const WCHAR* GetLastErrorMessage(void) const
+	const wchar_t* GetLastErrorMessage(void) const
 	{
-		return (const WCHAR*)mLastErrorMessage;
+		return mLastErrorMessage.c_str();
 	}
 
 
-	BOOL CheckReconnectErrorCode(void)
+	bool CheckReconnectErrorCode(void) const
 	{
 		switch (mLastErrorCode)
 		{
@@ -236,38 +228,47 @@ public:
 
 			break;
 		default:
-			return FALSE;
+			return false;
 		}
 
-		return TRUE;
+		return true;
+	}
+
+	void SetWideByteQuery(const wchar_t *pQuery)
+	{
+		mWideByteQuery = pQuery;
+	}
+
+	std::wstring GetWideByteQuery(void) const
+	{
+		return mWideByteQuery;
 	}
 
 private:
 
-	void setConnectInfo(WCHAR* pConnectIP, DWORD connectPort, WCHAR* pSchema, WCHAR* pUserID, WCHAR* pUserPassword)
+	void setConnectInfo(const wchar_t* pConnectIP, unsigned short connectPort, const wchar_t* pSchema, const wchar_t* pUserID, const wchar_t* pUserPassword)
 	{
-		wcscpy_s(mConnectIP, pConnectIP);
+		mConnectIP = pConnectIP;
 
 		mConnectPort = connectPort;
 
-		wcscpy_s(mSchema, pSchema);
+		mSchema = pSchema;
 
-		wcscpy_s(mUserID, pUserID);
+		mUserID = pUserID;
 
-		wcscpy_s(mUserPassword, pUserPassword);
+		mUserPassword = pUserPassword;
 
 		return;
 	}
 
 
-	void setWideByteErrorMessage(const CHAR* errorMessage)
+	void setWideByteErrorMessage(const char* errorMessage)
 	{
-		MultiByteToWideChar(CP_ACP, 0, errorMessage, -1, mLastErrorMessage, MAX_PATH);
-
+		size_t size;
+		mbstowcs_s(&size, &mLastErrorMessage[0], mLastErrorMessage.size(), errorMessage, strlen(errorMessage));
 		return;
 	}
 	
-
 
 	MYSQL mMySQL;
 
@@ -275,26 +276,25 @@ private:
 
 	MYSQL_RES* mpMySQLResult;
 
-	BOOL mbConnectStateFlag;
+	bool mbConnectStateFlag;
 
-	INT mLastErrorCode;
+	unsigned int mLastErrorCode;
 
-	DWORD mConnectPort;
+	unsigned short mConnectPort;
 
-	WCHAR mConnectIP[dbconnector::MAX_IP_LENGTH];
+	std::wstring mConnectIP;
 
-	WCHAR mSchema[dbconnector::MAX_SCHEMA_LENGTH];
+	std::wstring mSchema;
 
-	WCHAR mUserID[dbconnector::MAX_ID_LENGTH];
+	std::wstring mUserID;
 
-	WCHAR mUserPassword[dbconnector::MAX_PASSWORD_LENGTH];
+	std::wstring mUserPassword;
 
-	WCHAR mLastErrorMessage[dbconnector::MAX_ERROR_MESSAGE_LENGTH];
+	std::wstring mLastErrorMessage;
 
-	WCHAR mWideByteQuery[dbconnector::MAX_QUERY_LENGTH];
+	std::wstring mWideByteQuery;
 
-	CHAR mMultiByteQuery[dbconnector::MAX_QUERY_LENGTH];
-
+	std::string mMultiByteQuery;
 };
 
 
